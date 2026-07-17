@@ -1,16 +1,19 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Trade, TradeStats, CompletedStage, DailyPnL, BalancePoint } from '@/types';
-import { STAGES, getCurrentStage, getCompletedStages } from '@/constants/stages';
+import { Stage, STAGES, generateDynamicStages } from '@/constants/stages';
 
 const TRADES_KEY = '@trading_journal_trades';
 const COMPLETED_STAGES_KEY = '@trading_journal_completed_stages';
 const INITIAL_BALANCE_KEY = '@trading_journal_initial_balance';
+const STRATEGIES_KEY = '@trading_journal_strategies';
 
 interface TradesContextType {
   trades: Trade[];
   completedStages: CompletedStage[];
   initialBalance: number;
+  stages: Stage[];
+  strategies: string[];
   stats: TradeStats;
   dailyPnL: DailyPnL[];
   balanceHistory: BalancePoint[];
@@ -20,6 +23,8 @@ interface TradesContextType {
   deleteTrade: (id: string) => Promise<void>;
   setInitialBalance: (balance: number) => Promise<void>;
   getTrade: (id: string) => Trade | undefined;
+  addStrategy: (name: string) => Promise<void>;
+  removeStrategy: (name: string) => Promise<void>;
 }
 
 const defaultStats: TradeStats = {
@@ -49,6 +54,8 @@ const TradesContext = createContext<TradesContextType>({
   trades: [],
   completedStages: [],
   initialBalance: 0,
+  stages: STAGES,
+  strategies: [],
   stats: defaultStats,
   dailyPnL: [],
   balanceHistory: [],
@@ -58,6 +65,8 @@ const TradesContext = createContext<TradesContextType>({
   deleteTrade: async () => {},
   setInitialBalance: async () => {},
   getTrade: () => undefined,
+  addStrategy: async () => {},
+  removeStrategy: async () => {},
 });
 
 function computeStats(trades: Trade[], initialBalance: number): TradeStats {
@@ -76,7 +85,6 @@ function computeStats(trades: Trade[], initialBalance: number): TradeStats {
   const currentBalance = sorted[sorted.length - 1].endingBalance;
   const startingBalance = sorted[0].startingBalance;
 
-  // Streak calculation
   let longestWinStreak = 0, longestLossStreak = 0, curWin = 0, curLoss = 0;
   for (const t of sorted) {
     if (t.profitLoss > 0) { curWin++; curLoss = 0; longestWinStreak = Math.max(longestWinStreak, curWin); }
@@ -84,7 +92,6 @@ function computeStats(trades: Trade[], initialBalance: number): TradeStats {
     else { curWin = 0; curLoss = 0; }
   }
 
-  // Daily grouping
   const dailyMap: Record<string, number> = {};
   for (const t of sorted) {
     dailyMap[t.date] = (dailyMap[t.date] || 0) + t.profitLoss;
@@ -141,14 +148,11 @@ function computeBalanceHistory(trades: Trade[], initialBalance: number): Balance
   return points;
 }
 
-function detectCompletedStages(trades: Trade[], existing: CompletedStage[]): CompletedStage[] {
+function detectCompletedStages(trades: Trade[], stages: Stage[]): CompletedStage[] {
   const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
-  const completed: CompletedStage[] = [...existing];
+  const completed: CompletedStage[] = [];
 
-  for (const stage of STAGES) {
-    const alreadyRecorded = completed.find((cs) => cs.stageNumber === stage.number);
-    if (alreadyRecorded) continue;
-
+  for (const stage of stages) {
     const completingTrade = sorted.find((t) => t.endingBalance >= stage.targetBalance);
     if (!completingTrade) continue;
 
@@ -161,9 +165,7 @@ function detectCompletedStages(trades: Trade[], existing: CompletedStage[]): Com
     const daysToComplete = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
 
     const tradeDates = new Set(
-      sorted
-        .filter((t) => t.date >= startDate && t.date <= endDate)
-        .map((t) => t.date)
+      sorted.filter((t) => t.date >= startDate && t.date <= endDate).map((t) => t.date)
     );
 
     completed.push({
@@ -182,34 +184,45 @@ function detectCompletedStages(trades: Trade[], existing: CompletedStage[]): Com
 
 export function TradesProvider({ children }: { children: React.ReactNode }) {
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [completedStages, setCompletedStages] = useState<CompletedStage[]>([]);
   const [initialBalance, setInitialBalanceState] = useState(0);
+  const [strategiesState, setStrategiesState] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [tradesJson, stagesJson, balanceStr] = await Promise.all([
+        const [tradesJson, balanceStr, strategiesJson] = await Promise.all([
           AsyncStorage.getItem(TRADES_KEY),
-          AsyncStorage.getItem(COMPLETED_STAGES_KEY),
           AsyncStorage.getItem(INITIAL_BALANCE_KEY),
+          AsyncStorage.getItem(STRATEGIES_KEY),
         ]);
         if (tradesJson) setTrades(JSON.parse(tradesJson));
-        if (stagesJson) setCompletedStages(JSON.parse(stagesJson));
         if (balanceStr) setInitialBalanceState(parseFloat(balanceStr));
+        if (strategiesJson) setStrategiesState(JSON.parse(strategiesJson));
       } catch (e) {
-        console.error('Error loading trades:', e);
+        console.error('Error loading data:', e);
       } finally {
         setIsLoading(false);
       }
     })();
   }, []);
 
+  // Compute stages dynamically from the plan's starting balance
+  const stages = useMemo(
+    () => (initialBalance > 0 ? generateDynamicStages(initialBalance) : STAGES),
+    [initialBalance],
+  );
+
+  // Completed stages are derived — no need to persist separately
+  const completedStages = useMemo(
+    () => (trades.length > 0 ? detectCompletedStages(trades, stages) : []),
+    [trades, stages],
+  );
+
   const persistTrades = useCallback(async (newTrades: Trade[]) => {
     await AsyncStorage.setItem(TRADES_KEY, JSON.stringify(newTrades));
-    const newCompleted = detectCompletedStages(newTrades, []);
-    setCompletedStages(newCompleted);
-    await AsyncStorage.setItem(COMPLETED_STAGES_KEY, JSON.stringify(newCompleted));
+    // Keep legacy key for backward compat (ignored on load now)
+    await AsyncStorage.removeItem(COMPLETED_STAGES_KEY);
   }, []);
 
   const addTrade = useCallback(async (trade: Omit<Trade, 'id' | 'createdAt'>) => {
@@ -242,14 +255,33 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
 
   const getTrade = useCallback((id: string) => trades.find((t) => t.id === id), [trades]);
 
+  const addStrategy = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || strategiesState.includes(trimmed)) return;
+    const next = [...strategiesState, trimmed];
+    setStrategiesState(next);
+    await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(next));
+  }, [strategiesState]);
+
+  const removeStrategy = useCallback(async (name: string) => {
+    const next = strategiesState.filter((s) => s !== name);
+    setStrategiesState(next);
+    await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(next));
+  }, [strategiesState]);
+
   const stats = useMemo(() => computeStats(trades, initialBalance), [trades, initialBalance]);
   const dailyPnL = useMemo(() => computeDailyPnL(trades), [trades]);
-  const balanceHistory = useMemo(() => trades.length > 0 ? computeBalanceHistory(trades, initialBalance) : [], [trades, initialBalance]);
+  const balanceHistory = useMemo(
+    () => (trades.length > 0 ? computeBalanceHistory(trades, initialBalance) : []),
+    [trades, initialBalance],
+  );
 
   return (
     <TradesContext.Provider value={{
-      trades, completedStages, initialBalance, stats, dailyPnL, balanceHistory,
-      isLoading, addTrade, updateTrade, deleteTrade, setInitialBalance, getTrade,
+      trades, completedStages, initialBalance, stages, strategies: strategiesState,
+      stats, dailyPnL, balanceHistory, isLoading,
+      addTrade, updateTrade, deleteTrade, setInitialBalance, getTrade,
+      addStrategy, removeStrategy,
     }}>
       {children}
     </TradesContext.Provider>

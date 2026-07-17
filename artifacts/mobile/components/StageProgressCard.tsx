@@ -1,18 +1,19 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useColors } from '@/hooks/useColors';
-import { getCurrentStage, getStageProgress } from '@/constants/stages';
+import { Stage, getCurrentStage, getStageProgress } from '@/constants/stages';
 import { CompletedStage } from '@/types';
 import { Feather } from '@expo/vector-icons';
 
 interface StageProgressCardProps {
   balance: number;
   completedStages: CompletedStage[];
+  stages: Stage[];
 }
 
-export function StageProgressCard({ balance, completedStages }: StageProgressCardProps) {
+export function StageProgressCard({ balance, completedStages, stages }: StageProgressCardProps) {
   const colors = useColors();
-  const stage = getCurrentStage(balance);
+  const stage = getCurrentStage(balance, stages);
   const progress = getStageProgress(balance, stage);
   const animWidth = useRef(new Animated.Value(0)).current;
 
@@ -27,6 +28,11 @@ export function StageProgressCard({ balance, completedStages }: StageProgressCar
 
   const remaining = stage.targetBalance - balance;
   const isCompleted = balance >= stage.targetBalance;
+
+  const formatBalance = (v: number) => {
+    if (v >= 1000) return `$${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`;
+    return `$${v.toFixed(v < 10 ? 2 : v < 100 ? 1 : 0)}`;
+  };
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -52,7 +58,7 @@ export function StageProgressCard({ balance, completedStages }: StageProgressCar
         </View>
         <View style={styles.targetBlock}>
           <Text style={[styles.balanceLabel, { color: colors.mutedForeground }]}>Stage Target</Text>
-          <Text style={[styles.balanceValue, { color: stage.color }]}>${stage.targetBalance.toFixed(0)}</Text>
+          <Text style={[styles.balanceValue, { color: stage.color }]}>{formatBalance(stage.targetBalance)}</Text>
         </View>
       </View>
 
@@ -72,7 +78,7 @@ export function StageProgressCard({ balance, completedStages }: StageProgressCar
       <View style={styles.footer}>
         <Text style={[styles.progressPct, { color: stage.color }]}>{Math.round(progress * 100)}%</Text>
         <Text style={[styles.remaining, { color: colors.mutedForeground }]}>
-          {remaining > 0 ? `$${remaining.toFixed(2)} to go` : 'Target reached!'}
+          {remaining > 0 ? `${formatBalance(remaining)} to go` : 'Target reached!'}
         </Text>
       </View>
 
@@ -92,12 +98,7 @@ export function StageProgressCard({ balance, completedStages }: StageProgressCar
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    gap: 12,
-  },
+  card: { borderRadius: 16, padding: 16, borderWidth: 1, gap: 12 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stageBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   stageBadgeText: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },

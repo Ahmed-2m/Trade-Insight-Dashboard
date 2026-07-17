@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
   Platform, Alert, Image, ActivityIndicator,
@@ -7,12 +7,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useTrades } from '@/context/TradesContext';
 import { Feather } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 
 const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1H', '4H', '1D', '1W'];
-const STRATEGIES = ['Trend Following', 'Breakout', 'Scalping', 'Swing Trade', 'News Trade', 'Support/Resistance', 'ICT Concepts', 'Price Action', 'Other'];
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 function getDayName(dateStr: string): string {
@@ -44,9 +43,11 @@ interface FormState {
 export default function NewTradeScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { addTrade, stats } = useTrades();
-  const params = useLocalSearchParams();
+  const { addTrade, stats, strategies, addStrategy } = useTrades();
   const [saving, setSaving] = useState(false);
+  const [addingStrategy, setAddingStrategy] = useState(false);
+  const [newStrategyName, setNewStrategyName] = useState('');
+  const strategyInputRef = useRef<TextInput>(null);
 
   const [form, setForm] = useState<FormState>({
     date: today(),
@@ -67,11 +68,7 @@ export default function NewTradeScreen() {
   const bottomInset = Platform.OS === 'web' ? 34 : 0;
 
   const set = useCallback(<K extends keyof FormState>(key: K, val: FormState[K]) => {
-    setForm((prev) => {
-      const next = { ...prev, [key]: val };
-      // Auto-recalculate ending balance when profitLoss or startingBalance changes
-      return next;
-    });
+    setForm((prev) => ({ ...prev, [key]: val }));
   }, []);
 
   const endingBalance = useMemo(() => {
@@ -88,6 +85,16 @@ export default function NewTradeScreen() {
       quality: 0.7,
     });
     if (!result.canceled && result.assets[0]) set('screenshotUri', result.assets[0].uri);
+  };
+
+  const handleSaveStrategy = async () => {
+    const name = newStrategyName.trim();
+    if (!name) { setAddingStrategy(false); return; }
+    await addStrategy(name);
+    set('strategy', name);
+    setNewStrategyName('');
+    setAddingStrategy(false);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   const handleSave = async () => {
@@ -284,19 +291,59 @@ export default function NewTradeScreen() {
           </View>
         </Section>
 
-        {/* Strategy */}
+        {/* Strategy — user-managed */}
         <Section title="Strategy" colors={colors}>
-          <View style={styles.chipsWrap}>
-            {STRATEGIES.map((s) => (
-              <TouchableOpacity
-                key={s}
-                style={[styles.chip, { backgroundColor: form.strategy === s ? colors.primary : colors.card, borderColor: form.strategy === s ? colors.primary : colors.border }]}
-                onPress={() => set('strategy', s)}
-              >
-                <Text style={[styles.chipText, { color: form.strategy === s ? '#fff' : colors.mutedForeground }]}>{s}</Text>
+          {strategies.length === 0 && !addingStrategy ? (
+            <Text style={[styles.emptyStrategies, { color: colors.mutedForeground }]}>
+              No strategies yet. Tap + to add your first.
+            </Text>
+          ) : (
+            <View style={styles.chipsWrap}>
+              {strategies.map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.chip, {
+                    backgroundColor: form.strategy === s ? colors.primary : colors.card,
+                    borderColor: form.strategy === s ? colors.primary : colors.border,
+                  }]}
+                  onPress={() => set('strategy', form.strategy === s ? '' : s)}
+                >
+                  <Text style={[styles.chipText, { color: form.strategy === s ? '#fff' : colors.mutedForeground }]}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {/* Inline "Add Strategy" row */}
+          {addingStrategy ? (
+            <View style={[styles.addStrategyRow, { backgroundColor: colors.card, borderColor: colors.primary + '60' }]}>
+              <TextInput
+                ref={strategyInputRef}
+                style={[styles.addStrategyInput, { color: colors.foreground }]}
+                value={newStrategyName}
+                onChangeText={setNewStrategyName}
+                placeholder="Strategy name…"
+                placeholderTextColor={colors.mutedForeground}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleSaveStrategy}
+              />
+              <TouchableOpacity onPress={handleSaveStrategy} style={[styles.addStrategyBtn, { backgroundColor: colors.primary }]}>
+                <Feather name="check" size={14} color="#fff" />
               </TouchableOpacity>
-            ))}
-          </View>
+              <TouchableOpacity onPress={() => { setAddingStrategy(false); setNewStrategyName(''); }} style={[styles.addStrategyBtn, { backgroundColor: colors.muted }]}>
+                <Feather name="x" size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.addChip, { borderColor: colors.primary + '80' }]}
+              onPress={() => setAddingStrategy(true)}
+            >
+              <Feather name="plus" size={13} color={colors.primary} />
+              <Text style={[styles.addChipText, { color: colors.primary }]}>Add Strategy</Text>
+            </TouchableOpacity>
+          )}
         </Section>
 
         {/* Duration */}
@@ -377,9 +424,15 @@ const styles = StyleSheet.create({
   directionRow: { flexDirection: 'row', gap: 10 },
   dirBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5 },
   dirBtnText: { fontSize: 14, fontWeight: '700' },
-  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   chipText: { fontSize: 13, fontWeight: '600' },
+  emptyStrategies: { fontSize: 13, fontStyle: 'italic', marginBottom: 10 },
+  addChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', alignSelf: 'flex-start', marginTop: 2 },
+  addChipText: { fontSize: 13, fontWeight: '600' },
+  addStrategyRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, marginTop: 2 },
+  addStrategyInput: { flex: 1, fontSize: 14, paddingVertical: 6 },
+  addStrategyBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   endingBalanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, padding: 12, borderRadius: 10, borderWidth: 1 },
   endingLabel: { fontSize: 13 },
   endingValue: { fontSize: 16, fontWeight: '700' },
