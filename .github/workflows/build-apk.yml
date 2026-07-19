@@ -14,14 +14,20 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install Dependencies
-        run: |
-          npm install -g eas-cli
-          npm install
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8 # أو الإصدار الذي تفضله
+
+      - name: Install EAS CLI globally via pnpm
+        run: pnpm add -g eas-cli
+
+      - name: Install Dependencies using pnpm
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build Android Offline
         run: |
-          # هذا الأمر يقوم ببناء نسخة الـ APK يدوياً داخل الجيتهب
+          # بناء نسخة الـ APK باستخدام pnpm داخل بيئة الـ Expo
           npx expo run:android --variant release --no-dev --build-cache
 
       - name: Upload APK Artifact
