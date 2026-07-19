@@ -1,6 +1,6 @@
 name: Build Android APK
 on:
-  workflow_dispatch: # يتيح لك الضغط على Run Workflow يدوياً
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,20 +14,19 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
+      - name: Install pnpm (v9 to support Catalogs)
+        uses: pnpm/action-setup@v4
         with:
-          version: 8 # أو الإصدار الذي تفضله
+          version: 9 # رفع الإصدار إلى 9 لحل مشكلة الـ catalog:
 
-      - name: Install EAS CLI globally via pnpm
+      - name: Install EAS CLI globally
         run: pnpm add -g eas-cli
 
-      - name: Install Dependencies using pnpm
+      - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
       - name: Build Android Offline
         run: |
-          # بناء نسخة الـ APK باستخدام pnpm داخل بيئة الـ Expo
           npx expo run:android --variant release --no-dev --build-cache
 
       - name: Upload APK Artifact
