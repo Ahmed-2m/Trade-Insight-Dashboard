@@ -9,15 +9,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js (v22 to support Expo requirements)
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22 # تحديث الإصدار لتجنب مشاكل الـ Unsupported engine
 
       - name: Install pnpm (v9 to support Catalogs)
         uses: pnpm/action-setup@v4
         with:
-          version: 9 # رفع الإصدار إلى 9 لحل مشكلة الـ catalog:
+          version: 9
 
       - name: Install EAS CLI globally
         run: pnpm add -g eas-cli
@@ -25,9 +25,10 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build Android Offline
+      - name: Build Android App (APK)
         run: |
-          npx expo run:android --variant release --no-dev --build-cache
+          # استخدام الأمر الرسمي المتوافق مع الإصدارات الحديثة
+          npx expo run:android --variant release --no-packager
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
