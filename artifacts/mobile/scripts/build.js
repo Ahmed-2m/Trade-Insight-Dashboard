@@ -57,9 +57,15 @@ function stripProtocol(domain) {
 }
 
 function getDeploymentDomain() {
-  if (process.env.REPLIT_INTERNAL_APP_DOMAIN) {
-    return stripProtocol(process.env.REPLIT_INTERNAL_APP_DOMAIN);
-  }
+  // إذا وجد متغير بيئة سيقرأه، وإذا لم يجد سيضع رابطاً افتراضياً ليتخطى الخطأ فوراً
+  const domain = process.env.EXPO_PUBLIC_DOMAIN || 
+                 process.env.REPLIT_INTERNAL_APP_DOMAIN || 
+                 process.env.REPLIT_DEV_DOMAIN || 
+                 'localhost';
+                 
+  return stripProtocol(domain);
+}
+
 
   if (process.env.REPLIT_DEV_DOMAIN) {
     return stripProtocol(process.env.REPLIT_DEV_DOMAIN);
