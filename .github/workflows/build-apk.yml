@@ -1,40 +1,31 @@
-name: Build Android Web APK
+name: Build Android APK
 on:
-  workflow_dispatch:
+  workflow_dispatch: # يتيح لك الضغط على Run Workflow يدوياً
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 18
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Install Dependencies with pnpm
+      - name: Install Dependencies
         run: |
-          pnpm install --no-frozen-lockfile
+          npm install -g eas-cli
+          npm install
 
-      - name: Install Web Packages for Mobile
+      - name: Build Android Offline
         run: |
-          cd artifacts/mobile
-          pnpm add react-native-web react-dom @expo/metro-runtime
+          # هذا الأمر يقوم ببناء نسخة الـ APK يدوياً داخل الجيتهب
+          npx expo run:android --variant release --no-dev --build-cache
 
-      - name: Build Web Static Files
-        run: |
-          cd artifacts/mobile
-          pnpm expo export --platform web
-
-      - name: Upload Build Artifacts
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: web-built-app
-          path: artifacts/mobile/dist/
+          name: Android-App-APK
+          path: android/app/build/outputs/apk/release/app-release.apk
