@@ -27,11 +27,16 @@ jobs:
 
       - name: Build Android App (APK)
         run: |
-          # تشغيل الأمر النقي تماماً بدون أي علامات أو وسيطات إضافية تسبب أخطاء
+          # الدخول المباشر إلى مجلد تطبيق الجوال داخل الـ Monorepo
+          cd artifacts/mobile
+          
+          # تشغيل أمر بناء الـ APK الرسمي والنظيف
           npx expo run:android --variant release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Android-App-APK
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: |
+            artifacts/mobile/android/app/build/outputs/apk/release/app-release.apk
+            artifacts/mobile/android/app/build/outputs/apk/release/app-*.apk
