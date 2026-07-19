@@ -12,22 +12,29 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
-      - name: Install Dependencies
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Dependencies with pnpm
+        run: |
+          pnpm install --no-frozen-lockfile
+
+      - name: Install Web Packages for Mobile
         run: |
           cd artifacts/mobile
-          npm install
-          npm install react-native-web react-dom @expo/metro-runtime
+          pnpm add react-native-web react-dom @expo/metro-runtime
 
       - name: Build Web Static Files
         run: |
           cd artifacts/mobile
-          npx expo export --platform web
+          pnpm expo export --platform web
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: web-built-app
           path: artifacts/mobile/dist/
-
