@@ -9,12 +9,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (v22 to support Expo requirements)
+      - name: Setup Node.js (v22)
         uses: actions/setup-node@v4
         with:
-          node-version: 22 # تحديث الإصدار لتجنب مشاكل الـ Unsupported engine
+          node-version: 22
 
-      - name: Install pnpm (v9 to support Catalogs)
+      - name: Install pnpm (v9)
         uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -27,8 +27,8 @@ jobs:
 
       - name: Build Android App (APK)
         run: |
-          # استخدام الأمر الرسمي المتوافق مع الإصدارات الحديثة
-          npx expo run:android --variant release --no-packager
+          # تشغيل الأمر النقي تماماً بدون أي علامات أو وسيطات إضافية تسبب أخطاء
+          npx expo run:android --variant release
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
