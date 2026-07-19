@@ -25,12 +25,17 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build Android App (APK)
+      - name: Prebuild and Build Android (APK)
         run: |
-          # الدخول المباشر إلى مجلد تطبيق الجوال داخل الـ Monorepo
           cd artifacts/mobile
           
-          # تشغيل أمر بناء الـ APK الرسمي والنظيف
+          # أولاً: توليد مجلد أندرويد وتخطي السؤال الحواري عن طريق منع التثبيت التلقائي
+          npx expo prebuild --platform android --no-install
+          
+          # ثانياً: تحديث حزم المشروع عبر pnpm لضمان استقرار الملفات الجديدة
+          pnpm install --no-frozen-lockfile
+          
+          # ثالثاً: تشغيل أمر البناء النهائي للـ APK
           npx expo run:android --variant release
 
       - name: Upload APK Artifact
