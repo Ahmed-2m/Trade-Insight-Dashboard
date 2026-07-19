@@ -1,0 +1,3 @@
+- [Clerk Expo auth pattern](clerk-expo-auth.md) — ClerkBridge component bridges auth into context; never call useAuth() inside try-catch or conditionally (Rules of Hooks).
+- [Cloud sync architecture](cloud-sync.md) — TradesContext exposes onAuthChange(); ClerkBridge calls it; API in lib/api.ts uses bearer tokens via setApiTokenGetter().
+- [i18n approach](i18n-approach.md) — Custom LanguageContext (no i18next); translations in i18n/translations.ts; Arabic default + RTL via I18nManager.forceRTL().

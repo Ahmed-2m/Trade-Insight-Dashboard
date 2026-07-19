@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Trade, TradeStats, CompletedStage, DailyPnL, BalancePoint } from '@/types';
 import { Stage, STAGES, generateDynamicStages } from '@/constants/stages';
+import { api } from '@/lib/api';
 
 const TRADES_KEY = '@trading_journal_trades';
 const COMPLETED_STAGES_KEY = '@trading_journal_completed_stages';
@@ -18,6 +19,7 @@ interface TradesContextType {
   dailyPnL: DailyPnL[];
   balanceHistory: BalancePoint[];
   isLoading: boolean;
+  isSignedIn: boolean;
   addTrade: (trade: Omit<Trade, 'id' | 'createdAt'>) => Promise<void>;
   updateTrade: (id: string, trade: Partial<Trade>) => Promise<void>;
   deleteTrade: (id: string) => Promise<void>;
@@ -25,6 +27,8 @@ interface TradesContextType {
   getTrade: (id: string) => Trade | undefined;
   addStrategy: (name: string) => Promise<void>;
   removeStrategy: (name: string) => Promise<void>;
+  /** Called by ClerkBridge to trigger cloud sync when user signs in */
+  onAuthChange: (signedIn: boolean) => void;
 }
 
 const defaultStats: TradeStats = {
@@ -60,6 +64,7 @@ const TradesContext = createContext<TradesContextType>({
   dailyPnL: [],
   balanceHistory: [],
   isLoading: true,
+  isSignedIn: false,
   addTrade: async () => {},
   updateTrade: async () => {},
   deleteTrade: async () => {},
@@ -67,64 +72,49 @@ const TradesContext = createContext<TradesContextType>({
   getTrade: () => undefined,
   addStrategy: async () => {},
   removeStrategy: async () => {},
+  onAuthChange: () => {},
 });
 
 function computeStats(trades: Trade[], initialBalance: number): TradeStats {
   if (trades.length === 0) {
     return { ...defaultStats, currentBalance: initialBalance, startingBalance: initialBalance };
   }
-
   const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date));
   const winning = sorted.filter((t) => t.profitLoss > 0);
   const losing = sorted.filter((t) => t.profitLoss < 0);
-
   const totalProfit = winning.reduce((s, t) => s + t.profitLoss, 0);
   const totalLoss = Math.abs(losing.reduce((s, t) => s + t.profitLoss, 0));
   const netProfit = sorted.reduce((s, t) => s + t.profitLoss, 0);
-
   const currentBalance = sorted[sorted.length - 1].endingBalance;
   const startingBalance = sorted[0].startingBalance;
-
   let longestWinStreak = 0, longestLossStreak = 0, curWin = 0, curLoss = 0;
   for (const t of sorted) {
     if (t.profitLoss > 0) { curWin++; curLoss = 0; longestWinStreak = Math.max(longestWinStreak, curWin); }
     else if (t.profitLoss < 0) { curLoss++; curWin = 0; longestLossStreak = Math.max(longestLossStreak, curLoss); }
     else { curWin = 0; curLoss = 0; }
   }
-
   const dailyMap: Record<string, number> = {};
-  for (const t of sorted) {
-    dailyMap[t.date] = (dailyMap[t.date] || 0) + t.profitLoss;
-  }
+  for (const t of sorted) { dailyMap[t.date] = (dailyMap[t.date] || 0) + t.profitLoss; }
   const days = Object.entries(dailyMap);
   const tradingDays = days.length;
   const bestDayEntry = days.reduce((a, b) => b[1] > a[1] ? b : a, ['', -Infinity]);
   const worstDayEntry = days.reduce((a, b) => b[1] < a[1] ? b : a, ['', Infinity]);
-
   const profitFactor = totalLoss === 0 ? (totalProfit > 0 ? Infinity : 0) : totalProfit / totalLoss;
   const largestWin = winning.length ? Math.max(...winning.map((t) => t.profitLoss)) : 0;
   const largestLoss = losing.length ? Math.abs(Math.min(...losing.map((t) => t.profitLoss))) : 0;
-
   return {
-    totalTrades: sorted.length,
-    winningTrades: winning.length,
-    losingTrades: losing.length,
+    totalTrades: sorted.length, winningTrades: winning.length, losingTrades: losing.length,
     winRate: sorted.length ? (winning.length / sorted.length) * 100 : 0,
-    totalProfit,
-    totalLoss,
-    netProfit,
+    totalProfit, totalLoss, netProfit,
     averageProfit: winning.length ? totalProfit / winning.length : 0,
     averageLoss: losing.length ? totalLoss / losing.length : 0,
     profitFactor: isFinite(profitFactor) ? profitFactor : 99.99,
-    largestWin,
-    largestLoss,
+    largestWin, largestLoss,
     bestDay: bestDayEntry[0] ? { date: bestDayEntry[0], profit: bestDayEntry[1] as number } : null,
     worstDay: worstDayEntry[0] ? { date: worstDayEntry[0], profit: worstDayEntry[1] as number } : null,
-    longestWinStreak,
-    longestLossStreak,
+    longestWinStreak, longestLossStreak,
     averageDailyProfit: tradingDays ? netProfit / tradingDays : 0,
-    currentBalance,
-    startingBalance,
+    currentBalance, startingBalance,
     totalGrowth: startingBalance ? ((currentBalance - startingBalance) / startingBalance) * 100 : 0,
   };
 }
@@ -151,34 +141,18 @@ function computeBalanceHistory(trades: Trade[], initialBalance: number): Balance
 function detectCompletedStages(trades: Trade[], stages: Stage[]): CompletedStage[] {
   const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
   const completed: CompletedStage[] = [];
-
   for (const stage of stages) {
     const completingTrade = sorted.find((t) => t.endingBalance >= stage.targetBalance);
     if (!completingTrade) continue;
-
     const startingTrade = sorted.find((t) => t.startingBalance >= stage.startBalance) ?? sorted[0];
     const startDate = startingTrade?.date ?? completingTrade.date;
     const endDate = completingTrade.date;
-
     const start = new Date(startDate);
     const end = new Date(endDate);
     const daysToComplete = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-
-    const tradeDates = new Set(
-      sorted.filter((t) => t.date >= startDate && t.date <= endDate).map((t) => t.date)
-    );
-
-    completed.push({
-      stageNumber: stage.number,
-      startDate,
-      endDate,
-      daysToComplete,
-      tradingDays: tradeDates.size,
-      startBalance: stage.startBalance,
-      endBalance: stage.targetBalance,
-    });
+    const tradeDates = new Set(sorted.filter((t) => t.date >= startDate && t.date <= endDate).map((t) => t.date));
+    completed.push({ stageNumber: stage.number, startDate, endDate, daysToComplete, tradingDays: tradeDates.size, startBalance: stage.startBalance, endBalance: stage.targetBalance });
   }
-
   return completed.sort((a, b) => a.stageNumber - b.stageNumber);
 }
 
@@ -187,7 +161,9 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
   const [initialBalance, setInitialBalanceState] = useState(0);
   const [strategiesState, setStrategiesState] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSignedIn, setIsSignedIn] = useState(false);
 
+  // Load from AsyncStorage on mount
   useEffect(() => {
     (async () => {
       try {
@@ -207,13 +183,49 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  // Compute stages dynamically from the plan's starting balance
+  // Called by ClerkBridge when auth state changes
+  const onAuthChange = useCallback(async (signedIn: boolean) => {
+    setIsSignedIn(signedIn);
+    if (!signedIn) return;
+
+    // Fetch from cloud and merge
+    try {
+      const [cloudProfile, cloudTrades, cloudStrategies] = await Promise.all([
+        api.getProfile(),
+        api.getTrades(),
+        api.getStrategies(),
+      ]);
+
+      const mergedBalance: number = (cloudProfile?.initialBalance ?? 0) > 0
+        ? cloudProfile.initialBalance
+        : (await AsyncStorage.getItem(INITIAL_BALANCE_KEY).then(v => v ? parseFloat(v) : 0));
+      const mergedTrades: Trade[] = (cloudTrades?.length > 0)
+        ? cloudTrades
+        : JSON.parse((await AsyncStorage.getItem(TRADES_KEY)) ?? '[]');
+      const mergedStrategies: string[] = (cloudStrategies?.length > 0)
+        ? cloudStrategies
+        : JSON.parse((await AsyncStorage.getItem(STRATEGIES_KEY)) ?? '[]');
+
+      setInitialBalanceState(mergedBalance);
+      setTrades(mergedTrades);
+      setStrategiesState(mergedStrategies);
+
+      await Promise.all([
+        AsyncStorage.setItem(INITIAL_BALANCE_KEY, mergedBalance.toString()),
+        AsyncStorage.setItem(TRADES_KEY, JSON.stringify(mergedTrades)),
+        AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(mergedStrategies)),
+      ]);
+    } catch (err) {
+      // Cloud unavailable — use local data already loaded
+      console.warn('Cloud sync failed, using local data:', err);
+    }
+  }, []);
+
   const stages = useMemo(
     () => (initialBalance > 0 ? generateDynamicStages(initialBalance) : STAGES),
     [initialBalance],
   );
 
-  // Completed stages are derived — no need to persist separately
   const completedStages = useMemo(
     () => (trades.length > 0 ? detectCompletedStages(trades, stages) : []),
     [trades, stages],
@@ -221,7 +233,6 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
 
   const persistTrades = useCallback(async (newTrades: Trade[]) => {
     await AsyncStorage.setItem(TRADES_KEY, JSON.stringify(newTrades));
-    // Keep legacy key for backward compat (ignored on load now)
     await AsyncStorage.removeItem(COMPLETED_STAGES_KEY);
   }, []);
 
@@ -234,24 +245,31 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
     const newTrades = [...trades, newTrade];
     setTrades(newTrades);
     await persistTrades(newTrades);
-  }, [trades, persistTrades]);
+    if (isSignedIn) api.postTrade(newTrade).catch(() => {});
+  }, [trades, persistTrades, isSignedIn]);
 
   const updateTrade = useCallback(async (id: string, updates: Partial<Trade>) => {
     const newTrades = trades.map((t) => (t.id === id ? { ...t, ...updates } : t));
     setTrades(newTrades);
     await persistTrades(newTrades);
-  }, [trades, persistTrades]);
+    if (isSignedIn) {
+      const updated = newTrades.find((t) => t.id === id);
+      if (updated) api.putTrade(id, updated).catch(() => {});
+    }
+  }, [trades, persistTrades, isSignedIn]);
 
   const deleteTrade = useCallback(async (id: string) => {
     const newTrades = trades.filter((t) => t.id !== id);
     setTrades(newTrades);
     await persistTrades(newTrades);
-  }, [trades, persistTrades]);
+    if (isSignedIn) api.deleteTrade(id).catch(() => {});
+  }, [trades, persistTrades, isSignedIn]);
 
   const setInitialBalance = useCallback(async (balance: number) => {
     setInitialBalanceState(balance);
     await AsyncStorage.setItem(INITIAL_BALANCE_KEY, balance.toString());
-  }, []);
+    if (isSignedIn) api.putProfile({ initialBalance: balance, language: 'ar' }).catch(() => {});
+  }, [isSignedIn]);
 
   const getTrade = useCallback((id: string) => trades.find((t) => t.id === id), [trades]);
 
@@ -261,13 +279,15 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
     const next = [...strategiesState, trimmed];
     setStrategiesState(next);
     await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(next));
-  }, [strategiesState]);
+    if (isSignedIn) api.postStrategy(trimmed).catch(() => {});
+  }, [strategiesState, isSignedIn]);
 
   const removeStrategy = useCallback(async (name: string) => {
     const next = strategiesState.filter((s) => s !== name);
     setStrategiesState(next);
     await AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(next));
-  }, [strategiesState]);
+    if (isSignedIn) api.deleteStrategy(name).catch(() => {});
+  }, [strategiesState, isSignedIn]);
 
   const stats = useMemo(() => computeStats(trades, initialBalance), [trades, initialBalance]);
   const dailyPnL = useMemo(() => computeDailyPnL(trades), [trades]);
@@ -279,9 +299,9 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
   return (
     <TradesContext.Provider value={{
       trades, completedStages, initialBalance, stages, strategies: strategiesState,
-      stats, dailyPnL, balanceHistory, isLoading,
+      stats, dailyPnL, balanceHistory, isLoading, isSignedIn,
       addTrade, updateTrade, deleteTrade, setInitialBalance, getTrade,
-      addStrategy, removeStrategy,
+      addStrategy, removeStrategy, onAuthChange,
     }}>
       {children}
     </TradesContext.Provider>

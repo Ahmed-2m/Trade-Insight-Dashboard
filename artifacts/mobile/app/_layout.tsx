@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -13,16 +13,49 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { TradesProvider } from '@/context/TradesContext';
+import { ClerkProvider, ClerkLoaded, useAuth } from '@clerk/expo';
+import { tokenCache } from '@clerk/expo/token-cache';
+import { TradesProvider, useTrades } from '@/context/TradesContext';
+import { LanguageProvider } from '@/context/LanguageContext';
+import { setApiTokenGetter } from '@/lib/api';
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
+
+/**
+ * Bridges Clerk auth state into TradesContext (cloud sync).
+ * Lives inside both ClerkProvider and TradesProvider — no routing side-effects.
+ */
+function ClerkBridge() {
+  const { isSignedIn, isLoaded, getToken } = useAuth();
+  const { onAuthChange } = useTrades();
+  const prevSignedIn = useRef<boolean | undefined>(undefined);
+
+  // Wire the token getter so the API can attach Bearer tokens
+  useEffect(() => {
+    setApiTokenGetter(() => getToken());
+  }, [getToken]);
+
+  // Trigger cloud sync whenever sign-in state changes
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (prevSignedIn.current !== isSignedIn) {
+      prevSignedIn.current = isSignedIn;
+      onAuthChange(isSignedIn ?? false);
+    }
+  }, [isSignedIn, isLoaded, onAuthChange]);
+
+  return null;
+}
+
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="(auth)" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="trade/new" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="trade/[id]" options={{ headerShown: false }} />
     </Stack>
@@ -46,18 +79,25 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <TradesProvider>
-            <GestureHandlerRootView>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </TradesProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    </SafeAreaProvider>
+    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+      <ClerkLoaded>
+        <LanguageProvider>
+          <SafeAreaProvider>
+            <ErrorBoundary>
+              <QueryClientProvider client={queryClient}>
+                <TradesProvider>
+                  <GestureHandlerRootView>
+                    <KeyboardProvider>
+                      <ClerkBridge />
+                      <RootLayoutNav />
+                    </KeyboardProvider>
+                  </GestureHandlerRootView>
+                </TradesProvider>
+              </QueryClientProvider>
+            </ErrorBoundary>
+          </SafeAreaProvider>
+        </LanguageProvider>
+      </ClerkLoaded>
+    </ClerkProvider>
   );
 }
