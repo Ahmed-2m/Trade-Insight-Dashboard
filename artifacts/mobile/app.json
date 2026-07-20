@@ -16,7 +16,14 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "android": {
+      "package": "com.tradeinsight.dashboard",
+      "packagingOptions": {
+        "pickFirst": [
+          "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        ]
+      }
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
