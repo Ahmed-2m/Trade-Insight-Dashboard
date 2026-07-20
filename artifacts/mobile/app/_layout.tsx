@@ -23,23 +23,23 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
+// وضع مفتاح تجريبي آمن في حال عدم وجود المفتاح لمنع انهيار التطبيق
+const publishableKey =
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+  'pk_test_cGxlYXNlLXByb3ZpZGUtY2xlcmstcGstdG8tZW5hYmxlLWF1dGgm';
 
 /**
  * Bridges Clerk auth state into TradesContext (cloud sync).
- * Lives inside both ClerkProvider and TradesProvider — no routing side-effects.
  */
 function ClerkBridge() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const { onAuthChange } = useTrades();
   const prevSignedIn = useRef<boolean | undefined>(undefined);
 
-  // Wire the token getter so the API can attach Bearer tokens
   useEffect(() => {
     setApiTokenGetter(() => getToken());
   }, [getToken]);
 
-  // Trigger cloud sync whenever sign-in state changes
   useEffect(() => {
     if (!isLoaded) return;
     if (prevSignedIn.current !== isSignedIn) {
@@ -72,32 +72,32 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <ClerkLoaded>
-        <LanguageProvider>
-          <SafeAreaProvider>
-            <ErrorBoundary>
-              <QueryClientProvider client={queryClient}>
+    <LanguageProvider>
+      <SafeAreaProvider>
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+              <ClerkLoaded>
                 <TradesProvider>
-                  <GestureHandlerRootView>
+                  <GestureHandlerRootView style={{ flex: 1 }}>
                     <KeyboardProvider>
                       <ClerkBridge />
                       <RootLayoutNav />
                     </KeyboardProvider>
                   </GestureHandlerRootView>
                 </TradesProvider>
-              </QueryClientProvider>
-            </ErrorBoundary>
-          </SafeAreaProvider>
-        </LanguageProvider>
-      </ClerkLoaded>
-    </ClerkProvider>
+              </ClerkLoaded>
+            </ClerkProvider>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </SafeAreaProvider>
+    </LanguageProvider>
   );
 }
