@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -13,40 +13,34 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { ClerkProvider, ClerkLoaded, useAuth } from '@clerk/expo';
-import { tokenCache } from '@clerk/expo/token-cache';
 import { TradesProvider, useTrades } from '@/context/TradesContext';
 import { LanguageProvider } from '@/context/LanguageContext';
+import { supabase } from '@/lib/supabase';
 import { setApiTokenGetter } from '@/lib/api';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient();
 
-// وضع مفتاح تجريبي آمن في حال عدم وجود المفتاح لمنع انهيار التطبيق
-const publishableKey =
-  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-  'pk_test_cGxlYXNlLXByb3ZpZGUtY2xlcmstcGstdG8tZW5hYmxlLWF1dGgm';
-
-/**
- * Bridges Clerk auth state into TradesContext (cloud sync).
- */
-function ClerkBridge() {
-  const { isSignedIn, isLoaded, getToken } = useAuth();
+function SupabaseBridge() {
   const { onAuthChange } = useTrades();
-  const prevSignedIn = useRef<boolean | undefined>(undefined);
 
   useEffect(() => {
-    setApiTokenGetter(() => getToken());
-  }, [getToken]);
+    // إعداد التوكن للطلبات
+    setApiTokenGetter(async () => {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token ?? null;
+    });
 
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (prevSignedIn.current !== isSignedIn) {
-      prevSignedIn.current = isSignedIn;
-      onAuthChange(isSignedIn ?? false);
-    }
-  }, [isSignedIn, isLoaded, onAuthChange]);
+    // استماع للتغيرات في حالة تسجيل الدخول
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      onAuthChange(!!session);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [onAuthChange]);
 
   return null;
 }
@@ -79,25 +73,22 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <LanguageProvider>
-      <SafeAreaProvider>
+    <SafeAreaProvider>
+      <LanguageProvider>
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
-            <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-              <ClerkLoaded>
-                <TradesProvider>
-                  <GestureHandlerRootView style={{ flex: 1 }}>
-                    <KeyboardProvider>
-                      <ClerkBridge />
-                      <RootLayoutNav />
-                    </KeyboardProvider>
-                  </GestureHandlerRootView>
-                </TradesProvider>
-              </ClerkLoaded>
-            </ClerkProvider>
+            <TradesProvider>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <KeyboardProvider>
+                  <SupabaseBridge />
+                  <RootLayoutNav />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </TradesProvider>
           </QueryClientProvider>
         </ErrorBoundary>
-      </SafeAreaProvider>
-    </LanguageProvider>
+      </LanguageProvider>
+    </SafeAreaProvider>
   );
 }
+
