@@ -1,24 +1,40 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
-import { useAuth, useUser } from '@clerk/expo';
 import { router } from 'expo-router';
 import { useLanguage } from '@/context/LanguageContext';
 import type { Language } from '@/i18n/translations';
+import { supabase } from '@/lib/supabase';
+import { User } from '@supabase/supabase-js';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { isSignedIn, signOut } = useAuth();
-  const { user } = useUser();
   const { t, language, setLanguage, isRTL } = useLanguage();
+  const [user, setUser] = useState<User | null>(null);
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : 0;
+
+  useEffect(() => {
+    // جلب المستخدم الحالي
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
+
+    // الاستماع لحالة تسجيل الدخول / الخروج
+    const { data: authListener } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   const handleSignOut = () => {
     Alert.alert(
@@ -29,7 +45,12 @@ export default function ProfileScreen() {
         {
           text: t.profile.signOut,
           style: 'destructive',
-          onPress: () => signOut(),
+          onPress: async () => {
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+              Alert.alert('خطأ', error.message);
+            }
+          },
         },
       ],
     );
@@ -39,6 +60,9 @@ export default function ProfileScreen() {
     { code: 'ar', label: t.profile.languages.ar, nativeLabel: 'العربية' },
     { code: 'en', label: t.profile.languages.en, nativeLabel: 'English' },
   ];
+
+  const userEmail = user?.email ?? '';
+  const firstLetter = userEmail ? userEmail[0].toUpperCase() : '?';
 
   return (
     <ScrollView
@@ -68,13 +92,13 @@ export default function ProfileScreen() {
         </Text>
 
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {isSignedIn ? (
+          {user ? (
             <>
               {/* Avatar */}
               <View style={[styles.userRow, isRTL && styles.rowReverse]}>
                 <View style={[styles.avatar, { backgroundColor: colors.primary + '30' }]}>
                   <Text style={[styles.avatarText, { color: colors.primary }]}>
-                    {user?.primaryEmailAddress?.emailAddress?.[0]?.toUpperCase() ?? '?'}
+                    {firstLetter}
                   </Text>
                 </View>
                 <View style={{ flex: 1 }}>
@@ -82,7 +106,7 @@ export default function ProfileScreen() {
                     {t.profile.signedInAs}
                   </Text>
                   <Text style={[styles.userEmail, { color: colors.foreground }, isRTL && styles.rtl]} numberOfLines={1}>
-                    {user?.primaryEmailAddress?.emailAddress ?? ''}
+                    {userEmail}
                   </Text>
                 </View>
                 <View style={[styles.syncBadge, { backgroundColor: '#0ECB8120', borderColor: '#0ECB8140' }]}>
@@ -256,3 +280,4 @@ const styles = StyleSheet.create({
   checkWrap: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   rtl: { textAlign: 'right' },
 });
+
