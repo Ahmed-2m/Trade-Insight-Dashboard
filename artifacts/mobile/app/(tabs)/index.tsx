@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PLAN_PRESETS } from '@/constants/stages';
 import * as Haptics from 'expo-haptics';
+import { useLanguage } from '@/context/LanguageContext';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CHART_W = SCREEN_W - 32;
@@ -21,6 +22,7 @@ const CHART_W = SCREEN_W - 32;
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
+  const { t, isRTL } = useLanguage();
   const { stats, completedStages, balanceHistory, trades, stages, initialBalance, setInitialBalance, isLoading } = useTrades();
   const [refreshing, setRefreshing] = React.useState(false);
   const [planModalVisible, setPlanModalVisible] = useState(false);
@@ -72,12 +74,12 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(false)} tintColor={colors.primary} />}
       >
         {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={[styles.greeting, { color: colors.mutedForeground }]}>Trading Journal</Text>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Dashboard</Text>
+        <View style={[styles.header, isRTL && styles.rowReverse]}>
+          <View style={isRTL ? { alignItems: 'flex-end' } : {}}>
+            <Text style={[styles.greeting, { color: colors.mutedForeground }]}>{t.dashboard.subtitle}</Text>
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t.dashboard.title}</Text>
           </View>
-          <View style={styles.headerButtons}>
+          <View style={[styles.headerButtons, isRTL && styles.rowReverse]}>
             <TouchableOpacity
               style={[styles.iconBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={openPlanModal}
@@ -102,29 +104,29 @@ export default function DashboardScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.heroCard}
         >
-          <View style={styles.heroTop}>
-            <Text style={styles.heroLabel}>Account Balance</Text>
-            <View style={[styles.growthBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+          <View style={[styles.heroTop, isRTL && styles.rowReverse]}>
+            <Text style={styles.heroLabel}>{t.dashboard.accountBalance}</Text>
+            <View style={[styles.growthBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }, isRTL && styles.rowReverse]}>
               <Feather name={growthPct >= 0 ? 'trending-up' : 'trending-down'} size={12} color="#fff" />
               <Text style={styles.growthText}>{growthPct >= 0 ? '+' : ''}{growthPct.toFixed(2)}%</Text>
             </View>
           </View>
-          <Text style={styles.heroBalance}>${currentBalance.toFixed(2)}</Text>
-          <View style={styles.heroStats}>
+          <Text style={[styles.heroBalance, isRTL && styles.rtl]}>${currentBalance.toFixed(2)}</Text>
+          <View style={[styles.heroStats, isRTL && styles.rowReverse]}>
             <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Net P&L</Text>
+              <Text style={styles.heroStatLabel}>{t.dashboard.netPnl}</Text>
               <Text style={[styles.heroStatValue, { color: isPositive ? '#7EF5C4' : '#FFA5B4' }]}>
                 {isPositive ? '+' : ''}${stats.netProfit.toFixed(2)}
               </Text>
             </View>
             <View style={[styles.heroDivider, { backgroundColor: 'rgba(255,255,255,0.25)' }]} />
             <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Win Rate</Text>
+              <Text style={styles.heroStatLabel}>{t.dashboard.winRate}</Text>
               <Text style={styles.heroStatValue}>{stats.winRate.toFixed(1)}%</Text>
             </View>
             <View style={[styles.heroDivider, { backgroundColor: 'rgba(255,255,255,0.25)' }]} />
             <View style={styles.heroStat}>
-              <Text style={styles.heroStatLabel}>Total Trades</Text>
+              <Text style={styles.heroStatLabel}>{t.dashboard.totalTrades}</Text>
               <Text style={styles.heroStatValue}>{stats.totalTrades}</Text>
             </View>
           </View>
@@ -132,12 +134,12 @@ export default function DashboardScreen() {
 
         {/* Stage Progress */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Stage Progress</Text>
+          <View style={[styles.sectionHeader, isRTL && styles.rowReverse]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{t.dashboard.stageProgress}</Text>
             {initialBalance > 0 && (
               <TouchableOpacity onPress={openPlanModal}>
                 <Text style={[styles.planLabel, { color: colors.primary }]}>
-                  Starting ${initialBalance % 1 === 0 ? initialBalance.toFixed(0) : initialBalance.toFixed(2)} ›
+                  {t.dashboard.starting}{initialBalance % 1 === 0 ? initialBalance.toFixed(0) : initialBalance.toFixed(2)} {isRTL ? '‹' : '›'}
                 </Text>
               </TouchableOpacity>
             )}
@@ -147,17 +149,21 @@ export default function DashboardScreen() {
 
         {/* Quick Stats Row */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Quick Stats</Text>
-          <View style={styles.statsRow}>
-            <StatCard label="Winning" value={`${stats.winningTrades}`} icon="check-circle" color={colors.profit} />
-            <StatCard label="Losing" value={`${stats.losingTrades}`} icon="x-circle" color={colors.loss} />
-            <StatCard label="Profit Factor" value={stats.profitFactor === 99.99 ? '∞' : stats.profitFactor.toFixed(2)} icon="activity" color={colors.primary} />
+          <Text style={[styles.sectionTitle, { color: colors.foreground }, isRTL && styles.rtl]}>
+            {isRTL ? 'إحصائيات سريعة' : 'Quick Stats'}
+          </Text>
+          <View style={[styles.statsRow, isRTL && styles.rowReverse]}>
+            <StatCard label={t.dashboard.winning} value={`${stats.winningTrades}`} icon="check-circle" color={colors.profit} />
+            <StatCard label={t.dashboard.losing} value={`${stats.losingTrades}`} icon="x-circle" color={colors.loss} />
+            <StatCard label={t.dashboard.profitFactor} value={stats.profitFactor === 99.99 ? '∞' : stats.profitFactor.toFixed(2)} icon="activity" color={colors.primary} />
           </View>
         </View>
 
         {/* Balance Chart */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Balance Growth</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }, isRTL && styles.rtl]}>
+            {t.dashboard.balanceGrowth}
+          </Text>
           <View style={[styles.chartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <LineChart data={balanceHistory} width={CHART_W - 32} height={140} />
           </View>
@@ -165,22 +171,22 @@ export default function DashboardScreen() {
 
         {/* Recent Trades */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Recent Trades</Text>
+          <View style={[styles.sectionHeader, isRTL && styles.rowReverse]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{t.dashboard.recentTrades}</Text>
             <TouchableOpacity onPress={() => router.push('/(tabs)/journal')}>
-              <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
+              <Text style={[styles.seeAll, { color: colors.primary }]}>{t.dashboard.seeAll}</Text>
             </TouchableOpacity>
           </View>
           {trades.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Feather name="book-open" size={28} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No trades yet</Text>
-              <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>Add your first trade to start tracking</Text>
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>{t.dashboard.noTrades}</Text>
+              <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>{t.dashboard.noTradesDesc}</Text>
               <TouchableOpacity
                 style={[styles.emptyBtn, { backgroundColor: colors.primary }]}
                 onPress={() => router.push('/trade/new')}
               >
-                <Text style={styles.emptyBtnText}>Add First Trade</Text>
+                <Text style={styles.emptyBtnText}>{t.dashboard.addFirstTrade}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -192,14 +198,14 @@ export default function DashboardScreen() {
                 return (
                   <TouchableOpacity
                     key={trade.id}
-                    style={[styles.recentTrade, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    style={[styles.recentTrade, { backgroundColor: colors.card, borderColor: colors.border }, isRTL && styles.rowReverse]}
                     onPress={() => router.push(`/trade/${trade.id}` as any)}
                     activeOpacity={0.7}
                   >
                     <View style={[styles.recentDot, { backgroundColor: isProfit ? colors.profit : colors.loss }]} />
                     <View style={styles.recentInfo}>
-                      <Text style={[styles.recentPair, { color: colors.foreground }]}>{trade.pair}</Text>
-                      <Text style={[styles.recentDate, { color: colors.mutedForeground }]}>{trade.date} · {trade.direction.toUpperCase()}</Text>
+                      <Text style={[styles.recentPair, { color: colors.foreground }, isRTL && styles.rtl]}>{trade.pair}</Text>
+                      <Text style={[styles.recentDate, { color: colors.mutedForeground }, isRTL && styles.rtl]}>{trade.date} · {trade.direction.toUpperCase()}</Text>
                     </View>
                     <Text style={[styles.recentPnl, { color: isProfit ? colors.profit : colors.loss }]}>
                       {isProfit ? '+' : ''}{trade.profitLoss.toFixed(2)}
@@ -224,11 +230,11 @@ export default function DashboardScreen() {
             {/* Handle */}
             <View style={[styles.modalHandle, { backgroundColor: colors.muted }]} />
 
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Personalize Your Plan</Text>
-                <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
-                  Your starting balance sets Stage 1 and generates a custom 12-stage roadmap.
+            <View style={[styles.modalHeader, isRTL && styles.rowReverse]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: colors.foreground }, isRTL && styles.rtl]}>{t.plan.title}</Text>
+                <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }, isRTL && styles.rtl]}>
+                  {t.plan.subtitle}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setPlanModalVisible(false)} style={[styles.closeBtn, { backgroundColor: colors.muted }]}>
@@ -238,18 +244,20 @@ export default function DashboardScreen() {
 
             {/* Current plan indicator */}
             {initialBalance > 0 && (
-              <View style={[styles.currentPlanBadge, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '40' }]}>
+              <View style={[styles.currentPlanBadge, { backgroundColor: colors.primary + '18', borderColor: colors.primary + '40' }, isRTL && styles.rowReverse]}>
                 <Feather name="check-circle" size={14} color={colors.primary} />
-                <Text style={[styles.currentPlanText, { color: colors.primary }]}>
-                  Current plan starts at ${initialBalance % 1 === 0 ? initialBalance.toFixed(0) : initialBalance.toFixed(2)}
+                <Text style={[styles.currentPlanText, { color: colors.primary }, isRTL && styles.rtl]}>
+                  {t.plan.currentPlan}{initialBalance % 1 === 0 ? initialBalance.toFixed(0) : initialBalance.toFixed(2)}
                 </Text>
               </View>
             )}
 
-            <Text style={[styles.modalSectionLabel, { color: colors.mutedForeground }]}>Choose Starting Amount</Text>
+            <Text style={[styles.modalSectionLabel, { color: colors.mutedForeground }, isRTL && styles.rtl]}>
+              {t.plan.chooseAmount}
+            </Text>
 
             {/* Preset grid */}
-            <View style={styles.presetGrid}>
+            <View style={[styles.presetGrid, isRTL && styles.rowReverse]}>
               {PLAN_PRESETS.map((amount) => {
                 const isActive = initialBalance === amount;
                 return (
@@ -275,13 +283,13 @@ export default function DashboardScreen() {
 
             {/* Custom amount */}
             {showCustomInput ? (
-              <View style={[styles.customInputRow, { backgroundColor: colors.background, borderColor: colors.primary + '60' }]}>
+              <View style={[styles.customInputRow, { backgroundColor: colors.background, borderColor: colors.primary + '60' }, isRTL && styles.rowReverse]}>
                 <Text style={[styles.dollarSign, { color: colors.foreground }]}>$</Text>
                 <TextInput
-                  style={[styles.customInput, { color: colors.foreground }]}
+                  style={[styles.customInput, { color: colors.foreground }, isRTL && styles.rtl]}
                   value={customAmount}
                   onChangeText={setCustomAmount}
-                  placeholder="Enter amount"
+                  placeholder={t.plan.customAmount}
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="decimal-pad"
                   autoFocus
@@ -292,21 +300,21 @@ export default function DashboardScreen() {
                   style={[styles.customConfirmBtn, { backgroundColor: colors.primary }]}
                   onPress={handleCustomConfirm}
                 >
-                  <Text style={styles.customConfirmText}>Set</Text>
+                  <Text style={styles.customConfirmText}>{t.plan.set}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity
-                style={[styles.customToggleBtn, { borderColor: colors.border }]}
+                style={[styles.customToggleBtn, { borderColor: colors.border }, isRTL && styles.rowReverse]}
                 onPress={() => setShowCustomInput(true)}
               >
                 <Feather name="edit-3" size={14} color={colors.mutedForeground} />
-                <Text style={[styles.customToggleText, { color: colors.mutedForeground }]}>Enter custom amount</Text>
+                <Text style={[styles.customToggleText, { color: colors.mutedForeground }]}>{t.plan.customAmount}</Text>
               </TouchableOpacity>
             )}
 
             <Text style={[styles.modalHint, { color: colors.mutedForeground }]}>
-              Stages automatically scale from your starting balance through 12 progressive milestones.
+              {t.plan.hint}
             </Text>
           </View>
         </KeyboardAvoidingView>
@@ -352,6 +360,8 @@ const styles = StyleSheet.create({
   recentPair: { fontSize: 14, fontWeight: '700' },
   recentDate: { fontSize: 11, marginTop: 2 },
   recentPnl: { fontSize: 15, fontWeight: '700' },
+  rowReverse: { flexDirection: 'row-reverse' },
+  rtl: { textAlign: 'right' },
   // Modal
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
@@ -359,7 +369,7 @@ const styles = StyleSheet.create({
   modalHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
   modalHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   modalTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5, marginBottom: 4 },
-  modalSubtitle: { fontSize: 13, lineHeight: 18, maxWidth: 280 },
+  modalSubtitle: { fontSize: 13, lineHeight: 18 },
   closeBtn: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
   currentPlanBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: 12, borderWidth: 1 },
   currentPlanText: { fontSize: 13, fontWeight: '600' },
@@ -376,3 +386,4 @@ const styles = StyleSheet.create({
   customConfirmText: { color: '#fff', fontSize: 14, fontWeight: '700' },
   modalHint: { fontSize: 12, lineHeight: 17, textAlign: 'center' },
 });
+
