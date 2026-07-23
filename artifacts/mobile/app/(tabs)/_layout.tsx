@@ -10,31 +10,32 @@ import { SymbolView } from 'expo-symbols';
 import { useLanguage } from '@/context/LanguageContext';
 
 function NativeTabLayout() {
-  const { t } = useLanguage();
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
-        <Label>{t.tabs.dashboard}</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="journal">
-        <Icon sf={{ default: 'book', selected: 'book.fill' }} />
-        <Label>{t.tabs.journal}</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="stats">
-        <Icon sf={{ default: 'chart.line.uptrend.xyaxis', selected: 'chart.line.uptrend.xyaxis' }} />
-        <Label>{t.tabs.statistics}</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="insights">
-        <Icon sf={{ default: 'lightbulb', selected: 'lightbulb.fill' }} />
-        <Label>{t.tabs.insights}</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: 'person.circle', selected: 'person.circle.fill' }} />
-        <Label>{t.tabs.profile}</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
+  const { t, isRTL } = useLanguage();
+
+  const triggers = [
+    <NativeTabs.Trigger key="index" name="index">
+      <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
+      <Label>{t.tabs.dashboard}</Label>
+    </NativeTabs.Trigger>,
+    <NativeTabs.Trigger key="journal" name="journal">
+      <Icon sf={{ default: 'book', selected: 'book.fill' }} />
+      <Label>{t.tabs.journal}</Label>
+    </NativeTabs.Trigger>,
+    <NativeTabs.Trigger key="stats" name="stats">
+      <Icon sf={{ default: 'chart.line.uptrend.xyaxis', selected: 'chart.line.uptrend.xyaxis' }} />
+      <Label>{t.tabs.statistics}</Label>
+    </NativeTabs.Trigger>,
+    <NativeTabs.Trigger key="insights" name="insights">
+      <Icon sf={{ default: 'lightbulb', selected: 'lightbulb.fill' }} />
+      <Label>{t.tabs.insights}</Label>
+    </NativeTabs.Trigger>,
+    <NativeTabs.Trigger key="profile" name="profile">
+      <Icon sf={{ default: 'person.circle', selected: 'person.circle.fill' }} />
+      <Label>{t.tabs.profile}</Label>
+    </NativeTabs.Trigger>,
+  ];
+
+  return <NativeTabs>{isRTL ? triggers.reverse() : triggers}</NativeTabs>;
 }
 
 function ClassicTabLayout() {
