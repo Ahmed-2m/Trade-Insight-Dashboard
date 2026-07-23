@@ -10,12 +10,14 @@ import { TradeCard } from '@/components/TradeCard';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { useLanguage } from '@/context/LanguageContext';
 
 type SortKey = 'date-desc' | 'date-asc' | 'pnl-desc' | 'pnl-asc';
 
 export default function JournalScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
+  const { t, isRTL } = useLanguage();
   const { trades, deleteTrade } = useTrades();
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('date-desc');
@@ -48,10 +50,15 @@ export default function JournalScreen() {
   }, [trades, search, sort, filter]);
 
   const handleDelete = (id: string, pair: string) => {
-    Alert.alert('Delete Trade', `Remove trade for ${pair}?`, [
-      { text: 'Cancel', style: 'cancel' },
+    const title = isRTL ? 'حذف الصفقة' : 'Delete Trade';
+    const message = isRTL ? `هل تريد حذف صفقة ${pair}؟` : `Remove trade for ${pair}?`;
+    const cancelText = t.trade.cancel;
+    const deleteText = t.trade.delete;
+
+    Alert.alert(title, message, [
+      { text: cancelText, style: 'cancel' },
       {
-        text: 'Delete', style: 'destructive', onPress: async () => {
+        text: deleteText, style: 'destructive', onPress: async () => {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           await deleteTrade(id);
         },
@@ -60,28 +67,36 @@ export default function JournalScreen() {
   };
 
   const FILTERS: { key: typeof filter; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'win', label: 'Wins' },
-    { key: 'loss', label: 'Losses' },
-    { key: 'buy', label: 'Long' },
-    { key: 'sell', label: 'Short' },
+    { key: 'all', label: isRTL ? 'الكل' : 'All' },
+    { key: 'win', label: t.dashboard.winning },
+    { key: 'loss', label: t.dashboard.losing },
+    { key: 'buy', label: t.trade.buy },
+    { key: 'sell', label: t.trade.sell },
   ];
+
+  const tradesCountText = isRTL 
+    ? `${trades.length} ${trades.length === 1 ? 'صفقة' : 'صفقات'}`
+    : `${trades.length} trades`;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topInset + 8, backgroundColor: colors.background }]}>
-        <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: colors.foreground }]}>Journal</Text>
-          <Text style={[styles.count, { color: colors.mutedForeground }]}>{trades.length} trades</Text>
+        <View style={[styles.headerRow, isRTL && styles.rowReverse]}>
+          <Text style={[styles.title, { color: colors.foreground }, isRTL && styles.rtl]}>
+            {t.tabs.journal}
+          </Text>
+          <Text style={[styles.count, { color: colors.mutedForeground }]}>
+            {tradesCountText}
+          </Text>
         </View>
 
         {/* Search */}
-        <View style={[styles.searchRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.searchRow, { backgroundColor: colors.card, borderColor: colors.border }, isRTL && styles.rowReverse]}>
           <Feather name="search" size={15} color={colors.mutedForeground} />
           <TextInput
-            style={[styles.searchInput, { color: colors.foreground }]}
-            placeholder="Search pair, strategy..."
+            style={[styles.searchInput, { color: colors.foreground }, isRTL && styles.rtl]}
+            placeholder={isRTL ? 'ابحث عن زوج، استراتيجية...' : 'Search pair, strategy...'}
             placeholderTextColor={colors.mutedForeground}
             value={search}
             onChangeText={setSearch}
@@ -94,7 +109,7 @@ export default function JournalScreen() {
         </View>
 
         {/* Filter chips */}
-        <View style={styles.filterRow}>
+        <View style={[styles.filterRow, isRTL && styles.rowReverse]}>
           {FILTERS.map((f) => (
             <TouchableOpacity
               key={f.key}
@@ -132,10 +147,14 @@ export default function JournalScreen() {
           <View style={styles.empty}>
             <Feather name="book-open" size={32} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-              {search || filter !== 'all' ? 'No matching trades' : 'No trades yet'}
+              {search || filter !== 'all' 
+                ? (isRTL ? 'لا توجد صفقات تطابق البحث' : 'No matching trades') 
+                : t.dashboard.noTrades}
             </Text>
             <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
-              {search || filter !== 'all' ? 'Try a different filter' : 'Record your first trade to get started'}
+              {search || filter !== 'all' 
+                ? (isRTL ? 'جرب تغيير الفلتر أو كلمة البحث' : 'Try a different filter') 
+                : t.dashboard.noTradesDesc}
             </Text>
           </View>
         }
@@ -145,7 +164,11 @@ export default function JournalScreen() {
 
       {/* FAB */}
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary, bottom: bottomInset + 90 }]}
+        style={[
+          styles.fab, 
+          { backgroundColor: colors.primary, bottom: bottomInset + 90 },
+          isRTL ? { left: 20 } : { right: 20 }
+        ]}
         onPress={async () => {
           await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           router.push('/trade/new');
@@ -174,5 +197,8 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', gap: 8, paddingVertical: 60 },
   emptyTitle: { fontSize: 16, fontWeight: '700', marginTop: 4 },
   emptyDesc: { fontSize: 13, textAlign: 'center', maxWidth: 240 },
-  fab: { position: 'absolute', right: 20, width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#6C5CE7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
+  fab: { position: 'absolute', width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#6C5CE7', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
+  rowReverse: { flexDirection: 'row-reverse' },
+  rtl: { textAlign: 'right' },
 });
+
