@@ -41,14 +41,14 @@ export default function ProfileScreen() {
       isRTL ? 'تأكيد تسجيل الخروج' : 'Confirm Sign Out',
       isRTL ? 'هل أنت متأكد أنك تريد تسجيل الخروج؟' : 'Are you sure you want to sign out?',
       [
-        { text: isRTL ? 'إلغاء' : 'Cancel', style: 'cancel' },
+        { text: t.trade.cancel, style: 'cancel' },
         {
           text: t.profile.signOut,
           style: 'destructive',
           onPress: async () => {
             const { error } = await supabase.auth.signOut();
             if (error) {
-              Alert.alert('خطأ', error.message);
+              Alert.alert(isRTL ? 'خطأ' : 'Error', error.message);
             }
           },
         },
@@ -74,10 +74,10 @@ export default function ProfileScreen() {
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <View style={[styles.header, isRTL && styles.headerRTL]}>
+      <View style={[styles.header, isRTL && styles.rowReverse]}>
         <View style={isRTL ? { alignItems: 'flex-end' } : {}}>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-            Trading Journal
+            {t.dashboard.subtitle}
           </Text>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
             {t.profile.title}
@@ -109,7 +109,7 @@ export default function ProfileScreen() {
                     {userEmail}
                   </Text>
                 </View>
-                <View style={[styles.syncBadge, { backgroundColor: '#0ECB8120', borderColor: '#0ECB8140' }]}>
+                <View style={[styles.syncBadge, { backgroundColor: '#0ECB8120', borderColor: '#0ECB8140' }, isRTL && styles.rowReverse]}>
                   <Feather name="cloud" size={12} color="#0ECB81" />
                   <Text style={styles.syncBadgeText}>
                     {isRTL ? 'مزامنة' : 'Synced'}
@@ -140,11 +140,10 @@ export default function ProfileScreen() {
                 <View style={[styles.infoIconWrap, { backgroundColor: '#F6465D15' }]}>
                   <Feather name="log-out" size={16} color="#F6465D" />
                 </View>
-                <Text style={[styles.actionText, { color: '#F6465D' }, isRTL && styles.rtl]}>
+                <Text style={[styles.actionText, { color: '#F6465D' }, isRTL && styles.rtl, { flex: 1 }]}>
                   {t.profile.signOut}
                 </Text>
-                {!isRTL && <Feather name="chevron-right" size={16} color="#F6465D" style={{ marginLeft: 'auto' }} />}
-                {isRTL && <Feather name="chevron-left" size={16} color="#F6465D" style={{ marginRight: 'auto' }} />}
+                <Feather name={isRTL ? "chevron-left" : "chevron-right"} size={16} color="#F6465D" />
               </TouchableOpacity>
             </>
           ) : (
@@ -178,7 +177,7 @@ export default function ProfileScreen() {
               <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
               <TouchableOpacity
-                style={[styles.signInBtn, { backgroundColor: colors.primary }]}
+                style={[styles.signInBtn, { backgroundColor: colors.primary }, isRTL && styles.rowReverse]}
                 onPress={() => router.push('/(auth)/sign-in')}
                 activeOpacity={0.8}
               >
@@ -227,8 +226,8 @@ export default function ProfileScreen() {
         </View>
         <Text style={[styles.sectionHint, { color: colors.mutedForeground }, isRTL && styles.rtl]}>
           {isRTL
-            ? 'تأثير اللغة يكتمل عند إعادة تشغيل التطبيق'
-            : 'Full RTL layout takes effect after restarting the app'}
+            ? 'تأثير تغيير اتجاه الواجهة الكامل يكتمل عند إعادة تشغيل التطبيق.'
+            : 'Full RTL layout takes effect after restarting the app.'}
         </Text>
       </View>
     </ScrollView>
@@ -238,7 +237,6 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, marginBottom: 4 },
-  headerRTL: { flexDirection: 'row-reverse' },
   headerSub: { fontSize: 12, marginBottom: 2 },
   headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   section: { paddingHorizontal: 16, marginTop: 20, gap: 8 },
@@ -250,7 +248,6 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, borderWidth: 1, overflow: 'hidden' },
   divider: { height: 1, marginHorizontal: 16 },
   userRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
-  rowReverse: { flexDirection: 'row-reverse' },
   avatar: {
     width: 44, height: 44, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
@@ -278,6 +275,7 @@ const styles = StyleSheet.create({
   langName: { fontSize: 16, fontWeight: '700' },
   langSub: { fontSize: 12, marginTop: 2 },
   checkWrap: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  rowReverse: { flexDirection: 'row-reverse' },
   rtl: { textAlign: 'right' },
 });
 
