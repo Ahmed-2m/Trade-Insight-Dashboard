@@ -1,5 +1,6 @@
 import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import { Platform, StyleSheet, useColorScheme } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // 👈 استيراد حواف الأمان
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -41,10 +42,16 @@ function NativeTabLayout() {
 function ClassicTabLayout() {
   const colors = useColors();
   const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets(); // 👈 جلب قيمة المساحة الآمنة السفلية للجهاز
   const { t } = useLanguage();
+  
   const isDark = colorScheme === 'dark';
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
+
+  // 📐 حساب الارتفاع والحشو السفلي ديناميكياً لعدم التداخل مع شريط نظام الموبايل
+  const basePaddingBottom = isWeb ? 34 : Math.max(insets.bottom, 12);
+  const calculatedHeight = isWeb ? 84 : 56 + basePaddingBottom;
 
   return (
     <Tabs
@@ -58,8 +65,8 @@ function ClassicTabLayout() {
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
-          height: isWeb ? 84 : 72,
-          paddingBottom: isWeb ? 34 : 12,
+          height: calculatedHeight, // 👈 ارتفاع ديناميكي يشمل مسافة أمان الموبايل
+          paddingBottom: basePaddingBottom, // 👈 رفع الأيقونات والنصوص فوق شريط النظام السفلي
           paddingTop: 8,
         },
         tabBarBackground: () =>
@@ -147,3 +154,4 @@ export default function TabLayout() {
   }
   return <ClassicTabLayout />;
 }
+
