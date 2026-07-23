@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Dimensions, Platform, RefreshControl, Modal, TextInput, KeyboardAvoidingView,
@@ -15,6 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { PLAN_PRESETS } from '@/constants/stages';
 import * as Haptics from 'expo-haptics';
 import { useLanguage } from '@/context/LanguageContext';
+import { supabase } from '@/lib/supabase';
+import { User } from '@supabase/supabase-js';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CHART_W = SCREEN_W - 32;
@@ -28,6 +30,7 @@ export default function DashboardScreen() {
   const [planModalVisible, setPlanModalVisible] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : 0;
@@ -37,6 +40,26 @@ export default function DashboardScreen() {
     ? stats.currentBalance
     : initialBalance > 0 ? initialBalance : stats.startingBalance;
   const growthPct = stats.totalGrowth;
+
+  // جلب معلومات المستخدم لعرض اسمه وإيميله بشكل أنيق
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // استخراج اسم البريد الإلكتروني
+  const userEmail = user?.email ?? '';
+  const rawName = userEmail ? userEmail.split('@')[0] : '';
+  const formattedName = rawName ? rawName.charAt(0).toUpperCase() + rawName.slice(1) : '';
 
   // Auto-show plan setup for brand-new users
   React.useEffect(() => {
@@ -73,11 +96,17 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(false)} tintColor={colors.primary} />}
       >
-        {/* Header */}
+        {/* Header - مع إضافة الترحبب الأنيق بالاسم */}
         <View style={[styles.header, isRTL && styles.rowReverse]}>
           <View style={isRTL ? { alignItems: 'flex-end' } : {}}>
-            <Text style={[styles.greeting, { color: colors.mutedForeground }]}>{t.dashboard.subtitle}</Text>
-            <Text style={[styles.headerTitle, { color: colors.foreground }]}>{t.dashboard.title}</Text>
+            <Text style={[styles.greeting, { color: colors.mutedForeground }, isRTL && styles.rtl]}>
+              {formattedName
+                ? (isRTL ? `مرحباً بك 👋 ${formattedName}` : `Welcome back 👋 ${formattedName}`)
+                : t.dashboard.subtitle}
+            </Text>
+            <Text style={[styles.headerTitle, { color: colors.foreground }, isRTL && styles.rtl]}>
+              {t.dashboard.title}
+            </Text>
           </View>
           <View style={[styles.headerButtons, isRTL && styles.rowReverse]}>
             <TouchableOpacity
@@ -326,7 +355,7 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 16 },
-  greeting: { fontSize: 12, marginBottom: 2 },
+  greeting: { fontSize: 13, fontWeight: '600', marginBottom: 2 },
   headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   headerButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
