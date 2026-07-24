@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Trade, TradeStats, CompletedStage, DailyPnL, BalancePoint } from '@/types';
+import { Trade, TradeStats, CompletedStage, DailyPnL, BalancePoint, Strategy, StrategyStage } from '@/types';
 import { Stage, STAGES, generateDynamicStages } from '@/constants/stages';
 import { api } from '@/lib/api';
 
@@ -15,6 +15,8 @@ interface TradesContextType {
   initialBalance: number;
   stages: Stage[];
   strategies: string[];
+  activeStrategy: Strategy | null;
+  activeStages: StrategyStage[];
   stats: TradeStats;
   dailyPnL: DailyPnL[];
   balanceHistory: BalancePoint[];
@@ -27,7 +29,7 @@ interface TradesContextType {
   getTrade: (id: string) => Trade | undefined;
   addStrategy: (name: string) => Promise<void>;
   removeStrategy: (name: string) => Promise<void>;
-  /** Called by ClerkBridge to trigger cloud sync when user signs in */
+  createNewStrategy: (strategyData: { initialBalance: number; targetBalance: number; durationDays: number; totalStages: number }) => Promise<void>;
   onAuthChange: (signedIn: boolean) => void;
 }
 
@@ -60,6 +62,8 @@ const TradesContext = createContext<TradesContextType>({
   initialBalance: 0,
   stages: STAGES,
   strategies: [],
+  activeStrategy: null,
+  activeStages: [],
   stats: defaultStats,
   dailyPnL: [],
   balanceHistory: [],
@@ -72,6 +76,7 @@ const TradesContext = createContext<TradesContextType>({
   getTrade: () => undefined,
   addStrategy: async () => {},
   removeStrategy: async () => {},
+  createNewStrategy: async () => {},
   onAuthChange: () => {},
 });
 
@@ -160,8 +165,24 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [initialBalance, setInitialBalanceState] = useState(0);
   const [strategiesState, setStrategiesState] = useState<string[]>([]);
+  const [activeStrategy, setActiveStrategy] = useState<Strategy | null>(null);
+  const [activeStages, setActiveStages] = useState<StrategyStage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSignedIn, setIsSignedIn] = useState(false);
+
+  // جلب الاستراتيجية والمراحل النشطة من Supabase
+  const refreshActiveStrategy = useCallback(async () => {
+    try {
+      const strat = await api.getActiveStrategyCloud();
+      if (strat) {
+        setActiveStrategy(strat);
+        const stagesList = await api.getStagesCloud(strat.id);
+        setActiveStages(stagesList);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch active strategy from cloud:', e);
+    }
+  }, []);
 
   // Load from AsyncStorage on mount
   useEffect(() => {
@@ -175,20 +196,21 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
         if (tradesJson) setTrades(JSON.parse(tradesJson));
         if (balanceStr) setInitialBalanceState(parseFloat(balanceStr));
         if (strategiesJson) setStrategiesState(JSON.parse(strategiesJson));
+        
+        await refreshActiveStrategy();
       } catch (e) {
         console.error('Error loading data:', e);
       } finally {
         setIsLoading(false);
       }
     })();
-  }, []);
+  }, [refreshActiveStrategy]);
 
   // Called by ClerkBridge when auth state changes
   const onAuthChange = useCallback(async (signedIn: boolean) => {
     setIsSignedIn(signedIn);
     if (!signedIn) return;
 
-    // Fetch from cloud and merge
     try {
       const [cloudProfile, cloudTrades, cloudStrategies] = await Promise.all([
         api.getProfile(),
@@ -215,11 +237,12 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.setItem(TRADES_KEY, JSON.stringify(mergedTrades)),
         AsyncStorage.setItem(STRATEGIES_KEY, JSON.stringify(mergedStrategies)),
       ]);
+
+      await refreshActiveStrategy();
     } catch (err) {
-      // Cloud unavailable — use local data already loaded
       console.warn('Cloud sync failed, using local data:', err);
     }
-  }, []);
+  }, [refreshActiveStrategy]);
 
   const stages = useMemo(
     () => (initialBalance > 0 ? generateDynamicStages(initialBalance) : STAGES),
@@ -241,12 +264,13 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
       ...trade,
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       createdAt: new Date().toISOString(),
+      strategyId: activeStrategy?.id,
     };
     const newTrades = [...trades, newTrade];
     setTrades(newTrades);
     await persistTrades(newTrades);
     if (isSignedIn) api.postTrade(newTrade).catch(() => {});
-  }, [trades, persistTrades, isSignedIn]);
+  }, [trades, persistTrades, isSignedIn, activeStrategy]);
 
   const updateTrade = useCallback(async (id: string, updates: Partial<Trade>) => {
     const newTrades = trades.map((t) => (t.id === id ? { ...t, ...updates } : t));
@@ -289,6 +313,18 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
     if (isSignedIn) api.deleteStrategy(name).catch(() => {});
   }, [strategiesState, isSignedIn]);
 
+  const createNewStrategy = useCallback(async (strategyData: {
+    initialBalance: number;
+    targetBalance: number;
+    durationDays: number;
+    totalStages: number;
+  }) => {
+    const newId = await api.createStrategyCloud(strategyData);
+    if (newId) {
+      await refreshActiveStrategy();
+    }
+  }, [refreshActiveStrategy]);
+
   const stats = useMemo(() => computeStats(trades, initialBalance), [trades, initialBalance]);
   const dailyPnL = useMemo(() => computeDailyPnL(trades), [trades]);
   const balanceHistory = useMemo(
@@ -299,9 +335,10 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
   return (
     <TradesContext.Provider value={{
       trades, completedStages, initialBalance, stages, strategies: strategiesState,
+      activeStrategy, activeStages,
       stats, dailyPnL, balanceHistory, isLoading, isSignedIn,
       addTrade, updateTrade, deleteTrade, setInitialBalance, getTrade,
-      addStrategy, removeStrategy, onAuthChange,
+      addStrategy, removeStrategy, createNewStrategy, onAuthChange,
     }}>
       {children}
     </TradesContext.Provider>
@@ -311,3 +348,4 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
 export function useTrades() {
   return useContext(TradesContext);
 }
+
