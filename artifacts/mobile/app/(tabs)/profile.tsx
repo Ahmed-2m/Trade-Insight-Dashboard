@@ -7,6 +7,7 @@ import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useLanguage } from '@/context/LanguageContext';
+import { useTrades } from '@/context/TradesContext'; // 🟢 استدعاء الهوك
 import type { Language } from '@/i18n/translations';
 import { supabase } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
@@ -15,6 +16,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { t, language, setLanguage, isRTL } = useLanguage();
+  const { deleteAccount } = useTrades(); // 🟢 استخدام دالة حذف الحساب
   const [user, setUser] = useState<User | null>(null);
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
@@ -53,6 +55,38 @@ export default function ProfileScreen() {
           },
         },
       ],
+    );
+  };
+
+  // 🟢 دالة التعامل مع حذف الحساب
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      isRTL ? '⚠️ حذف الحساب نهائياً' : '⚠️ Delete Account Permanently',
+      isRTL
+        ? 'سيتم حذف حسابك وجميع بيانات الصفقات والاستراتيجيات نهائياً ولا يمكن استرجاعها. هل أنت متأكد؟'
+        : 'Your account, trades, and strategies will be permanently deleted. This action cannot be undone. Are you sure?',
+      [
+        { text: t.trade.cancel, style: 'cancel' },
+        {
+          text: isRTL ? 'حذف الحساب' : 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            const success = await deleteAccount();
+            if (success) {
+              await supabase.auth.signOut();
+              Alert.alert(
+                isRTL ? 'تم الحذف' : 'Deleted',
+                isRTL ? 'تم حذف حسابك وبياناتك بنجاح.' : 'Your account and data have been deleted successfully.'
+              );
+            } else {
+              Alert.alert(
+                isRTL ? 'خطأ' : 'Error',
+                isRTL ? 'حدث خطأ أثناء حذف الحساب.' : 'Failed to delete account.'
+              );
+            }
+          },
+        },
+      ]
     );
   };
 
@@ -144,6 +178,23 @@ export default function ProfileScreen() {
                   {t.profile.signOut}
                 </Text>
                 <Feather name={isRTL ? "chevron-left" : "chevron-right"} size={16} color="#F6465D" />
+              </TouchableOpacity>
+
+              <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+              {/* 🟢 Delete Account */}
+              <TouchableOpacity
+                style={[styles.actionRow, isRTL && styles.rowReverse]}
+                onPress={handleDeleteAccount}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.infoIconWrap, { backgroundColor: '#FF000015' }]}>
+                  <Feather name="trash-2" size={16} color="#FF3B30" />
+                </View>
+                <Text style={[styles.actionText, { color: '#FF3B30' }, isRTL && styles.rtl, { flex: 1 }]}>
+                  {isRTL ? 'حذف الحساب' : 'Delete Account'}
+                </Text>
+                <Feather name={isRTL ? "chevron-left" : "chevron-right"} size={16} color="#FF3B30" />
               </TouchableOpacity>
             </>
           ) : (
@@ -278,4 +329,3 @@ const styles = StyleSheet.create({
   rowReverse: { flexDirection: 'row-reverse' },
   rtl: { textAlign: 'right' },
 });
-
