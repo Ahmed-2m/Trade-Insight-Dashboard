@@ -32,24 +32,30 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Build Android APK via Gradle
+        env:
+          # متغيرات بيئة Supabase الضرورية أثناء الـ Bundling
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          # زيادة ذاكرة Gradle لسرعة ومنع انقطاع البناء
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx4096m -XX:MaxMetaspaceSize=1024m'"
         run: |
           cd artifacts/mobile
           
-          # 1. توليد مجلد الـ android الأصلي صامتاً وبدون أسئلة تفاعلية
+          # 1. توليد مجلد الـ android الأصلي
           npx expo prebuild --platform android --no-install
           
-          # 2. تثبيت الحزم للتأكد من ربط جميع المكتبات الأصلية (Native Modules)
+          # 2. التأكد من ربط جميع المكتبات داخل مجلد الأندرويد
           pnpm install --no-frozen-lockfile
           
-          # 3. الدخول لمجلد الأندرويد وبناء الـ APK مباشرة بدون الحاجة لجهاز متصل
+          # 3. بناء الـ APK باستخدام Gradle
           cd android
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Android-App-APK
           path: |
-            artifacts/mobile/android/app/build/outputs/apk/release/app-release.apk
-            artifacts/mobile/android/app/build/outputs/apk/release/app-*.apk
+            artifacts/mobile/android/app/build/outputs/apk/release/*.apk
+          retention-days: 7
