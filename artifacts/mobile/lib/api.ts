@@ -143,6 +143,31 @@ export const api = {
     }
   },
 
+    /** حذف حساب المستخدم وجميع بياناته من Supabase */
+  async deleteAccountCloud(): Promise<boolean> {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return false;
+
+      const userId = userData.user.id;
+
+      // 1. حذف البيانات المرتبطة بالجداول
+      await supabase.from('trades').delete().eq('user_id', userId);
+      await supabase.from('stages').delete().eq('user_id', userId);
+      await supabase.from('strategies').delete().eq('user_id', userId);
+      await supabase.from('profiles').delete().eq('id', userId);
+
+      // 2. تسجيل الخروج وتصفية الجلسة
+      await supabase.auth.signOut();
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      return false;
+    }
+  },
+
+
   // Sync
   sync: (payload: {
     trades: unknown[];
