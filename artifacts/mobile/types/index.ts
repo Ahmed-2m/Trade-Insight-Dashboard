@@ -1,3 +1,25 @@
+export interface Strategy {
+  id: string;
+  name: string;
+  initialBalance: number;
+  targetAmount: number;
+  months: number;
+  stagesCount: number;
+  growthPerStage: number; // مثلاً 30%
+  status: 'active' | 'completed' | 'archived';
+  createdAt?: string;
+}
+
+export interface StrategyStage {
+  id: string;
+  strategyId: string;
+  stageNumber: number;
+  targetBalance: number;
+  startingBalance: number;
+  status: 'pending' | 'in_progress' | 'completed';
+  completedAt?: string;
+}
+
 export interface Trade {
   id: string;
   date: string; // YYYY-MM-DD
@@ -15,6 +37,9 @@ export interface Trade {
   duration: string;
   screenshotUri?: string;
   createdAt: string;
+  // حقول اختيارية للربط مع نظام الاستراتيجيات والمراحل الجديد في Supabase
+  strategyId?: string;
+  stageId?: string;
 }
 
 export interface TradeStats {
