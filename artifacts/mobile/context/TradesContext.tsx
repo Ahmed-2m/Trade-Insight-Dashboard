@@ -30,6 +30,7 @@ interface TradesContextType {
   addStrategy: (name: string) => Promise<void>;
   removeStrategy: (name: string) => Promise<void>;
   createNewStrategy: (strategyData: { initialBalance: number; targetBalance: number; durationDays: number; totalStages: number }) => Promise<void>;
+  deleteAccount: () => Promise<boolean>; // 🟢 إعلان دالة حذف الحساب
   onAuthChange: (signedIn: boolean) => void;
 }
 
@@ -77,6 +78,7 @@ const TradesContext = createContext<TradesContextType>({
   addStrategy: async () => {},
   removeStrategy: async () => {},
   createNewStrategy: async () => {},
+  deleteAccount: async () => false, // 🟢 قيمة افتراضية لدالة حذف الحساب
   onAuthChange: () => {},
 });
 
@@ -325,6 +327,34 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshActiveStrategy]);
 
+  // 🟢 دالة حذف الحساب بالكامل وحذف البيانات محلياً وسحابياً
+  const deleteAccount = useCallback(async (): Promise<boolean> => {
+    try {
+      if (isSignedIn) {
+        await api.deleteAccountCloud();
+      }
+
+      await AsyncStorage.multiRemove([
+        TRADES_KEY,
+        INITIAL_BALANCE_KEY,
+        STRATEGIES_KEY,
+        COMPLETED_STAGES_KEY,
+      ]);
+
+      setTrades([]);
+      setInitialBalanceState(0);
+      setStrategiesState([]);
+      setActiveStrategy(null);
+      setActiveStages([]);
+      setIsSignedIn(false);
+
+      return true;
+    } catch (e) {
+      console.error('Failed to delete account:', e);
+      return false;
+    }
+  }, [isSignedIn]);
+
   const stats = useMemo(() => computeStats(trades, initialBalance), [trades, initialBalance]);
   const dailyPnL = useMemo(() => computeDailyPnL(trades), [trades]);
   const balanceHistory = useMemo(
@@ -338,7 +368,7 @@ export function TradesProvider({ children }: { children: React.ReactNode }) {
       activeStrategy, activeStages,
       stats, dailyPnL, balanceHistory, isLoading, isSignedIn,
       addTrade, updateTrade, deleteTrade, setInitialBalance, getTrade,
-      addStrategy, removeStrategy, createNewStrategy, onAuthChange,
+      addStrategy, removeStrategy, createNewStrategy, deleteAccount, onAuthChange, // 🟢 تم إضافة deleteAccount للـ Value
     }}>
       {children}
     </TradesContext.Provider>
